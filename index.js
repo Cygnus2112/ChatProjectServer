@@ -13,6 +13,12 @@ const openai = new OpenAI({
   apiKey,
 });
 
+const messages = [
+  { role: 'system', content: 'You are a helpful assistant' },
+]
+
+let messageString = '';
+
 wss.on('connection', (ws, _) => {
   setTimeout(() => {
     ws.send('Hi Thomas, what can I help you with today?');
@@ -20,23 +26,28 @@ wss.on('connection', (ws, _) => {
   }, 500);
   ws.on('message', async (message) => { 
     try {
+      messages.push(
+        { role: 'user', content: message.toString() }
+      );
       const response = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant' },
-          { role: 'user', content: message.toString() },
-        ],
+        messages,
         stream: true,
       });
     
       for await (const chunk of response) {
         const text = chunk.choices[0]?.delta?.content || '';
+        messageString += text;
         ws.send(text);
       }
     } catch (err) {
       console.log(err);
     } finally {
       ws.send('FINISHED')
+      messages.push({
+        role: 'assistant', content: messageString,
+      })
+      messageString = '';
     }
   });
 });
